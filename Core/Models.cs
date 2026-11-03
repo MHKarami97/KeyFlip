@@ -21,12 +21,24 @@ public sealed class AppSettings
     /// <summary>Uses the language of recently typed words as a prior for borderline decisions.</summary>
     public bool UseContext { get; set; } = true;
 
+    /// <summary>Manual mode: swap every word to the opposite language instead of picking one direction for the whole text.</summary>
+    public bool ManualConvertAllWords { get; set; }
+
     /// <summary>Process names (without .exe) where automatic conversion is disabled. Replace the list instead of mutating it.</summary>
     public List<string> ExcludedApps { get; set; } = new()
     {
         "WindowsTerminal", "cmd", "powershell", "pwsh", "conhost",
         "KeePass", "KeePassXC", "Bitwarden", "1Password"
     };
+
+    /// <summary>Reads the Persian key layout from the Persian keyboard layout installed in Windows.</summary>
+    public bool AutoDetectKeyMap { get; set; } = true;
+
+    /// <summary>Virtual-key code to Persian character. An empty string removes the key from the map.</summary>
+    public Dictionary<int, string> PersianKeyOverrides { get; set; } = new();
+
+    /// <summary>Virtual-key code to English character.</summary>
+    public Dictionary<int, string> EnglishKeyOverrides { get; set; } = new();
 
     /// <summary>Manual-mode hotkey modifiers: Alt=1, Ctrl=2, Shift=4, Win=8.</summary>
     public uint HotkeyModifiers { get; set; } = 0x0003;

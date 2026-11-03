@@ -17,19 +17,23 @@ public sealed class LanguageDetector
 {
     private const int EnglishLimit = 120_000;
     private const int PersianLimit = 150_000;
+    private const int ShortWordLength = 3;
+    private const int ShortWordRankLimit = 20_000;
     private const int MinWordsForNgram = 5000;
     private const int MinNgramLength = 4;
     private const int MinNgramLengthWithContext = 3;
     private const double Margin = 1.0;
     private const double WeakFraction = 0.5;
     private const double StrongBias = 0.4;
+    private const double BothKnownMinBias = 0.25;
+    private const double BothKnownRankRatio = 30;
     private const double SeedCount = 1e12;
 
     private readonly UserDictionary _user;
     private readonly NgramModel _englishModel = new();
     private readonly NgramModel _persianModel = new();
-    private HashSet<string> _english = new();
-    private HashSet<string> _persian = new();
+    private Dictionary<string, int> _english = new();
+    private Dictionary<string, int> _persian = new();
     private volatile bool _ready;
     private bool _ngramEnabled;
 
@@ -61,16 +65,48 @@ public sealed class LanguageDetector
         var typedWords = typedIsEnglish ? _english : _persian;
         var alternativeWords = typedIsEnglish ? _persian : _english;
 
-        if (Morphology.IsKnown(typed, typedWords, typedIsEnglish))
+        var typedKnown = Morphology.IsKnown(typed, typedWords, typedIsEnglish);
+        var alternativeKnown = Morphology.IsKnown(alternative, alternativeWords, !typedIsEnglish);
+
+        if (typedKnown && alternativeKnown)
+        {
+            var flip = PrefersAlternative(typed, alternative, typedWords, alternativeWords, bias);
+            return new Evaluation(flip ? Verdict.Flip : Verdict.Keep, !flip);
+        }
+
+        if (typedKnown)
         {
             return new Evaluation(Verdict.Keep, true);
         }
 
-        if (Morphology.IsKnown(alternative, alternativeWords, !typedIsEnglish))
+        if (alternativeKnown)
         {
             return new Evaluation(Verdict.Flip, false);
         }
 
+        return EvaluateByNgram(typed, alternative, typedIsEnglish, bias);
+    }
+
+    /// <summary>Both readings are real words: convert only if recent words support it and the alternative is far more frequent.</summary>
+    private static bool PrefersAlternative(
+        string typed,
+        string alternative,
+        Dictionary<string, int> typedWords,
+        Dictionary<string, int> alternativeWords,
+        double bias)
+    {
+        if (bias < BothKnownMinBias
+            || !typedWords.TryGetValue(typed, out var typedRank)
+            || !alternativeWords.TryGetValue(alternative, out var alternativeRank))
+        {
+            return false;
+        }
+
+        return typedRank / (double)alternativeRank >= BothKnownRankRatio;
+    }
+
+    private Evaluation EvaluateByNgram(string typed, string alternative, bool typedIsEnglish, double bias)
+    {
         var minimumLength = bias >= StrongBias ? MinNgramLengthWithContext : MinNgramLength;
         if (!_ngramEnabled || typed.Length < minimumLength)
         {
@@ -96,9 +132,9 @@ public sealed class LanguageDetector
             _english = LoadWords("en.txt", EnglishLimit, NormalizeEnglish);
             _persian = LoadWords("fa.txt", PersianLimit, NormalizePersian);
 
-            _englishModel.Train(_english);
+            _englishModel.Train(_english.Keys);
             _englishModel.Build();
-            _persianModel.Train(_persian);
+            _persianModel.Train(_persian.Keys);
             _persianModel.Build();
 
             _ngramEnabled = _english.Count >= MinWordsForNgram && _persian.Count >= MinWordsForNgram;
@@ -111,8 +147,11 @@ public sealed class LanguageDetector
         }
     }
 
-    /// <summary>Loads "word[TAB]count" lines and keeps the most frequent <paramref name="limit"/> words.</summary>
-    private static HashSet<string> LoadWords(string name, int limit, Func<string, string?> normalize)
+    /// <summary>
+    /// Loads "word[TAB]count" lines and returns word -> frequency rank (1 = most frequent).
+    /// Very short words must be highly ranked, because frequency lists contain many short noise tokens.
+    /// </summary>
+    private static Dictionary<string, int> LoadWords(string name, int limit, Func<string, string?> normalize)
     {
         var counts = new Dictionary<string, double>();
         foreach (var line in ReadAllLines(name))
@@ -130,7 +169,20 @@ public sealed class LanguageDetector
             counts[word] = Math.Max(counts.GetValueOrDefault(word), count);
         }
 
-        return counts.OrderByDescending(pair => pair.Value).Take(limit).Select(pair => pair.Key).ToHashSet();
+        var ranks = new Dictionary<string, int>();
+        var rank = 0;
+        foreach (var word in counts.OrderByDescending(pair => pair.Value).Take(limit).Select(pair => pair.Key))
+        {
+            rank++;
+            if (word.Length <= ShortWordLength && rank > ShortWordRankLimit)
+            {
+                continue;
+            }
+
+            ranks[word] = rank;
+        }
+
+        return ranks;
     }
 
     private static string? NormalizeEnglish(string raw)

@@ -71,7 +71,11 @@ public sealed class ManualConverter
                 return;
             }
 
-            var converted = TextConverter.Convert(text, out var target);
+            InputLanguage target;
+            var converted = _settings.ManualConvertAllWords
+                ? TextConverter.ConvertEachWord(text, out target)
+                : TextConverter.Convert(text, out target);
+
             if (converted == text)
             {
                 return;

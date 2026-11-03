@@ -1,35 +1,23 @@
 ﻿namespace KeyFlip.Core;
 
+/// <summary>Thread-safe key table: virtual key to (English character, Persian character).</summary>
 public static class KeyMap
 {
-    private static readonly Dictionary<int, (char English, char Persian)> Keys = Build();
+    private static volatile Dictionary<int, (char English, char Persian)> _table = KeyMapBuilder.CreateDefaults();
 
-    public static IEnumerable<int> AllKeys => Keys.Keys;
+    public static IEnumerable<int> AllKeys => _table.Keys;
+
+    public static void Replace(Dictionary<int, (char English, char Persian)> table) => _table = table;
 
     public static bool IsLetterKey(int virtualKey) => virtualKey is >= 0x41 and <= 0x5A;
 
-    public static bool IsMapped(int virtualKey, bool persianLayout) =>
-        IsLetterKey(virtualKey) || (persianLayout && Keys.ContainsKey(virtualKey));
-
-    public static char ToEnglish(int virtualKey) => Keys[virtualKey].English;
-
-    public static char ToPersian(int virtualKey) => Keys[virtualKey].Persian;
-
-    private static Dictionary<int, (char, char)> Build()
+    public static bool IsMapped(int virtualKey, bool persianLayout)
     {
-        var map = new Dictionary<int, (char, char)>();
-        const string english = "qwertyuiopasdfghjklzxcvbnm";
-        const string persian = "ضصثقفغعهخحشسیبلاتنمظطزرذدپ";
-        for (var i = 0; i < english.Length; i++)
-        {
-            map[char.ToUpperInvariant(english[i])] = (english[i], persian[i]);
-        }
-
-        map[0xBA] = (';', 'ک');
-        map[0xDE] = ('\'', 'گ');
-        map[0xDB] = ('[', 'ج');
-        map[0xDD] = (']', 'چ');
-        map[0xBC] = (',', 'و');
-        return map;
+        var table = _table;
+        return table.ContainsKey(virtualKey) && (persianLayout || IsLetterKey(virtualKey));
     }
+
+    public static char ToEnglish(int virtualKey) => _table.GetValueOrDefault(virtualKey).English;
+
+    public static char ToPersian(int virtualKey) => _table.GetValueOrDefault(virtualKey).Persian;
 }

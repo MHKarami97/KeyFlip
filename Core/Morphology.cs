@@ -12,10 +12,10 @@ public static class Morphology
         "ام", "ای", "اش", "ید", "یم", "ند", "ی", "م", "ت", "ش", "ه"
     };
 
-    public static bool IsKnown(string word, HashSet<string> words, bool english) =>
-        words.Contains(word) || (english ? IsKnownEnglish(word, words) : IsKnownPersian(word, words));
+    public static bool IsKnown(string word, Dictionary<string, int> words, bool english) =>
+        words.ContainsKey(word) || (english ? IsKnownEnglish(word, words) : IsKnownPersian(word, words));
 
-    private static bool IsKnownEnglish(string word, HashSet<string> words)
+    private static bool IsKnownEnglish(string word, Dictionary<string, int> words)
     {
         foreach (var suffix in EnglishSuffixes)
         {
@@ -25,17 +25,17 @@ public static class Morphology
             }
 
             var stem = word[..^suffix.Length];
-            if (words.Contains(stem) || words.Contains(stem + "e"))
+            if (words.ContainsKey(stem) || words.ContainsKey(stem + "e"))
             {
                 return true;
             }
 
-            if (stem.Length >= 4 && stem[^1] == stem[^2] && words.Contains(stem[..^1]))
+            if (stem.Length >= 4 && stem[^1] == stem[^2] && words.ContainsKey(stem[..^1]))
             {
                 return true;
             }
 
-            if (stem[^1] == 'i' && words.Contains(stem[..^1] + "y"))
+            if (stem[^1] == 'i' && words.ContainsKey(stem[..^1] + "y"))
             {
                 return true;
             }
@@ -44,7 +44,7 @@ public static class Morphology
         return false;
     }
 
-    private static bool IsKnownPersian(string word, HashSet<string> words)
+    private static bool IsKnownPersian(string word, Dictionary<string, int> words)
     {
         if (StripSuffixes(word, words, 2))
         {
@@ -59,7 +59,7 @@ public static class Morphology
             }
 
             var rest = word[prefix.Length..];
-            if (words.Contains(rest) || StripSuffixes(rest, words, 2))
+            if (words.ContainsKey(rest) || StripSuffixes(rest, words, 2))
             {
                 return true;
             }
@@ -68,7 +68,7 @@ public static class Morphology
         return false;
     }
 
-    private static bool StripSuffixes(string word, HashSet<string> words, int depth)
+    private static bool StripSuffixes(string word, Dictionary<string, int> words, int depth)
     {
         foreach (var suffix in PersianSuffixes)
         {
@@ -84,7 +84,7 @@ public static class Morphology
                 continue;
             }
 
-            if (words.Contains(stem) || (depth > 1 && StripSuffixes(stem, words, depth - 1)))
+            if (words.ContainsKey(stem) || (depth > 1 && StripSuffixes(stem, words, depth - 1)))
             {
                 return true;
             }

@@ -7,15 +7,19 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly SettingsStore _store = new();
     private readonly StartupManager _startup = new();
     private readonly UserDictionary _user = new();
+    private readonly KeyMapBuilder _keyMapBuilder = new();
     private readonly AppSettings _settings;
     private readonly ConversionEngine _engine;
     private readonly NotifyIcon _tray;
     private readonly SettingsPopup _popup;
     private AdvancedForm? _advanced;
+    private KeyMapForm? _keyMapEditor;
 
     public TrayApplicationContext()
     {
         _settings = _store.Load();
+        KeyMap.Replace(_keyMapBuilder.Build(_settings));
+
         _engine = new ConversionEngine(_settings, _user);
         _engine.Start();
 
@@ -38,6 +42,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _tray.Dispose();
         _popup.Dispose();
         _advanced?.Dispose();
+        _keyMapEditor?.Dispose();
         _engine.Dispose();
         base.ExitThreadCore();
     }
@@ -75,9 +80,16 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenAdvanced()
     {
-        _advanced ??= new AdvancedForm(_settings, _user, OnSettingsChanged);
+        _advanced ??= new AdvancedForm(_settings, _user, OnSettingsChanged, OpenKeyMapEditor);
         _advanced.Show();
         _advanced.Activate();
+    }
+
+    private void OpenKeyMapEditor()
+    {
+        _keyMapEditor ??= new KeyMapForm(_settings, OnKeyMapChanged);
+        _keyMapEditor.Show();
+        _keyMapEditor.Activate();
     }
 
     private void OnTrayClick(object? sender, MouseEventArgs e)
@@ -105,6 +117,12 @@ public sealed class TrayApplicationContext : ApplicationContext
         _store.Save(_settings);
         _startup.Apply(_settings.RunAtStartup);
         ApplyEngineMode();
+    }
+
+    private void OnKeyMapChanged()
+    {
+        _store.Save(_settings);
+        KeyMap.Replace(_keyMapBuilder.Build(_settings));
     }
 
     private void ApplyEngineMode()

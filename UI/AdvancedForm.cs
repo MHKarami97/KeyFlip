@@ -11,13 +11,15 @@ public sealed class AdvancedForm : Form
     private readonly AppSettings _settings;
     private readonly UserDictionary _user;
     private readonly Action _onChanged;
+    private readonly Action _openKeyMapEditor;
     private readonly float _scale;
 
-    public AdvancedForm(AppSettings settings, UserDictionary user, Action onChanged)
+    public AdvancedForm(AppSettings settings, UserDictionary user, Action onChanged, Action openKeyMapEditor)
     {
         _settings = settings;
         _user = user;
         _onChanged = onChanged;
+        _openKeyMapEditor = openKeyMapEditor;
         _scale = GetScale();
 
         Text = "KeyFlip - تنظیمات پیشرفته";
@@ -28,13 +30,15 @@ public sealed class AdvancedForm : Form
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Create(10);
-        ClientSize = new Size(S(FormWidth), S(480));
+        ClientSize = new Size(S(FormWidth), S(566));
         Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
 
         AddToggle("برگرداندن تبدیل با Backspace", 16, _settings.UndoOnBackspace, v => _settings.UndoOnBackspace = v);
         AddToggle("استفاده از زمینه کلمات قبلی", 52, _settings.UseContext, v => _settings.UseContext = v);
-        AddAppsPanel(100);
-        AddWordsPanel(284);
+        AddToggle("حالت دستی: همه کلمات به زبان مقابل تبدیل شوند", 88, _settings.ManualConvertAllWords, v => _settings.ManualConvertAllWords = v);
+        AddAppsPanel(136);
+        AddWordsPanel(320);
+        AddKeyMapButton(508);
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -124,6 +128,17 @@ public sealed class AdvancedForm : Form
             Location = new Point(S(Margin), S(top))
         };
         Controls.Add(panel);
+    }
+
+    private void AddKeyMapButton(int top)
+    {
+        var button = new ActionButton("ویرایش نگاشت کلیدهای کیبورد", _scale, Theme.Accent)
+        {
+            BackColor = Theme.Background,
+            Bounds = new Rectangle(S(Margin), S(top), S(FormWidth - Margin * 2), S(40))
+        };
+        button.Click += (_, _) => _openKeyMapEditor();
+        Controls.Add(button);
     }
 
     private static IEnumerable<string> GetRunningProcessNames() =>

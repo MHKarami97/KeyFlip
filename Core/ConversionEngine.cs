@@ -137,7 +137,10 @@ public sealed class ConversionEngine : IDisposable
         _buffer.Clear();
         _skipWord = false;
 
-        if (skip || strokes.Length < 2 || LooksStructural(strokes, language))
+        var structural = strokes.Length > 0 && LooksStructural(strokes, language);
+        DebugLog.Write($"space: layout={language} keys={strokes.Length} skip={skip} structural={structural}");
+
+        if (skip || strokes.Length < 2 || structural)
         {
             _pending = null;
             return false;
@@ -158,6 +161,7 @@ public sealed class ConversionEngine : IDisposable
 
         var bias = Settings.UseContext ? _context.BiasToward(target) : 0;
         var evaluation = _detector.Evaluate(typed, alternative, language, bias);
+        DebugLog.Write($"typed='{typed}' alt='{alternative}' bias={bias:F2} verdict={evaluation.Verdict} typedKnown={evaluation.TypedKnown}");
 
         switch (evaluation.Verdict)
         {
