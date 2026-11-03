@@ -12,7 +12,7 @@
     <IncludeNativeLibrariesForSelfExtraction>true</IncludeNativeLibrariesForSelfExtraction>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KeyFlip</AssemblyName>
   </PropertyGroup>
   <ItemGroup>

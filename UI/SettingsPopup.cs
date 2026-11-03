@@ -5,6 +5,13 @@ namespace KeyFlip.UI;
 
 public sealed class SettingsPopup : Form
 {
+    private const int FormWidth = 360;
+    private const int FormHeight = 300;
+    private const int Margin = 16;
+    private const int ContentWidth = FormWidth - Margin * 2;
+    private const int ModeButtonWidth = 76;
+    private const int ModeButtonGap = 8;
+
     private readonly AppSettings _settings;
     private readonly Action _onChanged;
     private readonly Dictionary<ConversionMode, Button> _modeButtons = new();
@@ -19,7 +26,7 @@ public sealed class SettingsPopup : Form
         StartPosition = FormStartPosition.Manual;
         TopMost = true;
         BackColor = Theme.Background;
-        ClientSize = new Size(320, 300);
+        ClientSize = new Size(FormWidth, FormHeight);
         RightToLeft = RightToLeft.Yes;
         Font = Theme.Create(10);
 
@@ -49,14 +56,14 @@ public sealed class SettingsPopup : Form
             Font = Theme.Create(15, FontStyle.Bold),
             ForeColor = Theme.Text,
             AutoSize = false,
-            Bounds = new Rectangle(20, 16, 280, 34)
+            Bounds = new Rectangle(Margin, 16, ContentWidth, 34)
         });
         Controls.Add(new Label
         {
             Text = "اصلاح خودکار زبان تایپ",
             ForeColor = Theme.Muted,
             AutoSize = false,
-            Bounds = new Rectangle(20, 48, 280, 24)
+            Bounds = new Rectangle(Margin, 48, ContentWidth, 24)
         });
     }
 
@@ -70,7 +77,7 @@ public sealed class SettingsPopup : Form
             (ConversionMode.Auto, "خودکار")
         };
 
-        var x = 300 - 66;
+        var x = FormWidth - Margin - ModeButtonWidth;
         foreach (var item in items)
         {
             var mode = item.Mode;
@@ -78,9 +85,12 @@ public sealed class SettingsPopup : Form
             {
                 Text = item.Text,
                 FlatStyle = FlatStyle.Flat,
-                Bounds = new Rectangle(x, 92, 64, 40),
+                Bounds = new Rectangle(x, 92, ModeButtonWidth, 40),
                 Cursor = Cursors.Hand,
-                Font = Theme.Create(9.5f)
+                Font = Theme.Create(9),
+                Padding = Padding.Empty,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseVisualStyleBackColor = false
             };
             button.FlatAppearance.BorderSize = 0;
             button.Click += (_, _) =>
@@ -91,7 +101,7 @@ public sealed class SettingsPopup : Form
             };
             _modeButtons[mode] = button;
             Controls.Add(button);
-            x -= 72;
+            x -= ModeButtonWidth + ModeButtonGap;
         }
     }
 
@@ -102,10 +112,10 @@ public sealed class SettingsPopup : Form
             Text = text,
             ForeColor = Theme.Text,
             AutoSize = false,
-            Bounds = new Rectangle(76, top, 224, 26),
+            Bounds = new Rectangle(Margin + 52, top, ContentWidth - 52, 26),
             TextAlign = ContentAlignment.MiddleRight
         });
-        var toggle = new ToggleSwitch { Checked = value, Location = new Point(20, top + 2), BackColor = Theme.Background };
+        var toggle = new ToggleSwitch { Checked = value, Location = new Point(Margin, top + 2), BackColor = Theme.Background };
         toggle.CheckedChanged += (_, _) =>
         {
             setter(toggle.Checked);
@@ -122,8 +132,9 @@ public sealed class SettingsPopup : Form
             FlatStyle = FlatStyle.Flat,
             ForeColor = Theme.Muted,
             BackColor = Theme.Surface,
-            Bounds = new Rectangle(20, 248, 280, 36),
-            Cursor = Cursors.Hand
+            Bounds = new Rectangle(Margin, 248, ContentWidth, 36),
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false
         };
         exit.FlatAppearance.BorderSize = 0;
         exit.Click += (_, _) => Application.Exit();

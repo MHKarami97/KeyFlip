@@ -16,6 +16,7 @@ public sealed class ToggleSwitch : Control
 
     public event EventHandler? CheckedChanged;
 
+    [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool Checked
     {
