@@ -14,16 +14,18 @@ public sealed class SettingsPopup : Form
 
     private readonly AppSettings _settings;
     private readonly Action _onChanged;
+    private readonly Action _openAdvanced;
     private readonly float _scale;
     private readonly Bitmap? _logo;
     private readonly System.Windows.Forms.Timer _fade = new() { Interval = 12 };
     private ModeList? _modeList;
     private long _lastHiddenTick;
 
-    public SettingsPopup(AppSettings settings, Action onChanged)
+    public SettingsPopup(AppSettings settings, Action onChanged, Action openAdvanced)
     {
         _settings = settings;
         _onChanged = onChanged;
+        _openAdvanced = openAdvanced;
         _scale = GetScale();
         _logo = LoadLogo();
 
@@ -41,7 +43,7 @@ public sealed class SettingsPopup : Form
         BuildToggle("تغییر زبان کیبورد", 324, _settings.SwitchKeyboardLayout, v => _settings.SwitchKeyboardLayout = v);
         BuildToggle("اجرا با روشن شدن ویندوز", 360, _settings.RunAtStartup, v => _settings.RunAtStartup = v);
         BuildHotkeyRow(398);
-        BuildExit();
+        BuildActions();
 
         _fade.Tick += OnFadeTick;
         Deactivate += (_, _) => Hide();
@@ -195,12 +197,23 @@ public sealed class SettingsPopup : Form
         Controls.Add(box);
     }
 
-    private void BuildExit()
+    private void BuildActions()
     {
-        var exit = new ExitButton("خروج از برنامه", _scale)
+        var contentWidth = PopupWidth - Margin * 2;
+        var buttonWidth = (contentWidth - 8) / 2;
+
+        var advanced = new ActionButton("تنظیمات پیشرفته", _scale, Theme.Accent)
         {
             BackColor = Theme.Background,
-            Bounds = new Rectangle(S(Margin), S(440), S(PopupWidth - Margin * 2), S(40))
+            Bounds = new Rectangle(S(Margin) + S(buttonWidth + 8), S(440), S(buttonWidth), S(40))
+        };
+        advanced.Click += (_, _) => _openAdvanced();
+        Controls.Add(advanced);
+
+        var exit = new ActionButton("خروج", _scale, Theme.Danger, powerIcon: true)
+        {
+            BackColor = Theme.Background,
+            Bounds = new Rectangle(S(Margin), S(440), S(buttonWidth), S(40))
         };
         exit.Click += (_, _) => Application.Exit();
         Controls.Add(exit);

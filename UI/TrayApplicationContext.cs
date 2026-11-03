@@ -6,18 +6,20 @@ public sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly SettingsStore _store = new();
     private readonly StartupManager _startup = new();
+    private readonly UserDictionary _user = new();
     private readonly AppSettings _settings;
     private readonly ConversionEngine _engine;
     private readonly NotifyIcon _tray;
     private readonly SettingsPopup _popup;
+    private AdvancedForm? _advanced;
 
     public TrayApplicationContext()
     {
         _settings = _store.Load();
-        _engine = new ConversionEngine(_settings);
+        _engine = new ConversionEngine(_settings, _user);
         _engine.Start();
 
-        _popup = new SettingsPopup(_settings, OnSettingsChanged);
+        _popup = new SettingsPopup(_settings, OnSettingsChanged, OpenAdvanced);
         _tray = new NotifyIcon
         {
             Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!),
@@ -35,6 +37,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _tray.Visible = false;
         _tray.Dispose();
         _popup.Dispose();
+        _advanced?.Dispose();
         _engine.Dispose();
         base.ExitThreadCore();
     }
@@ -56,14 +59,25 @@ public sealed class TrayApplicationContext : ApplicationContext
         var settings = new ToolStripMenuItem("تنظیمات") { Padding = new Padding(10, 7, 10, 7) };
         settings.Click += (_, _) => _popup.PresentNear(Cursor.Position);
 
+        var advanced = new ToolStripMenuItem("تنظیمات پیشرفته") { Padding = new Padding(10, 7, 10, 7) };
+        advanced.Click += (_, _) => OpenAdvanced();
+
         var exit = new ToolStripMenuItem("خروج") { Tag = DarkMenuRenderer.DangerTag, Padding = new Padding(10, 7, 10, 7) };
         exit.Click += (_, _) => Application.Exit();
 
         menu.Items.Add(settings);
+        menu.Items.Add(advanced);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exit);
         menu.HandleCreated += (_, _) => Dwm.Apply(menu.Handle);
         return menu;
+    }
+
+    private void OpenAdvanced()
+    {
+        _advanced ??= new AdvancedForm(_settings, _user, OnSettingsChanged);
+        _advanced.Show();
+        _advanced.Activate();
     }
 
     private void OnTrayClick(object? sender, MouseEventArgs e)

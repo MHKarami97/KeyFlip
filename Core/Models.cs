@@ -15,6 +15,19 @@ public sealed class AppSettings
     public bool SwitchKeyboardLayout { get; set; } = true;
     public bool RunAtStartup { get; set; }
 
+    /// <summary>Pressing Backspace right after an automatic conversion restores the original text.</summary>
+    public bool UndoOnBackspace { get; set; } = true;
+
+    /// <summary>Uses the language of recently typed words as a prior for borderline decisions.</summary>
+    public bool UseContext { get; set; } = true;
+
+    /// <summary>Process names (without .exe) where automatic conversion is disabled. Replace the list instead of mutating it.</summary>
+    public List<string> ExcludedApps { get; set; } = new()
+    {
+        "WindowsTerminal", "cmd", "powershell", "pwsh", "conhost",
+        "KeePass", "KeePassXC", "Bitwarden", "1Password"
+    };
+
     /// <summary>Manual-mode hotkey modifiers: Alt=1, Ctrl=2, Shift=4, Win=8.</summary>
     public uint HotkeyModifiers { get; set; } = 0x0003;
 
