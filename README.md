@@ -1,8 +1,11 @@
 # KeyFlip
-Build & publish (self-contained single exe, no .NET needed on target):
+
+1. `python tools/prepare_data.py` (downloads and normalizes word lists into Data/).
+2. Put `Vazirmatn-Regular.ttf` in `Fonts/`.
+3. Publish:
 
     dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 
-Output: bin/Release/net10.0-windows/win-x64/publish/KeyFlip.exe
-
-1. Detection is dictionary-based: extend Data/en.txt and Data/fa.txt (one word per line) with large word lists. You can also place Data/en.txt / Data/fa.txt next to the exe.
+Detection: a word is flipped when it is unknown in the current language and either known in the other language,
+or (n-gram enabled, length >= 4) the other-language trigram score beats it by `Margin` (LanguageDetector.cs).
+N-gram scoring is enabled only when both lists have >= 5000 words.

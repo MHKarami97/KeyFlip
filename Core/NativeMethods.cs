@@ -39,13 +39,6 @@ internal static class NativeMethods
         public UIntPtr dwExtraInfo;
     }
 
-    [StructLayout(LayoutKind.Explicit)]
-    public struct InputUnion
-    {
-        [FieldOffset(0)] public KEYBDINPUT ki;
-        [FieldOffset(0)] public MOUSEINPUT mi;
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     public struct MOUSEINPUT
     {
@@ -55,6 +48,13 @@ internal static class NativeMethods
         public uint dwFlags;
         public uint time;
         public UIntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct InputUnion
+    {
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public MOUSEINPUT mi;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -1,4 +1,5 @@
 ﻿using System.Drawing.Drawing2D;
+using System.ComponentModel;
 
 namespace KeyFlip.UI;
 
@@ -15,6 +16,7 @@ public sealed class ToggleSwitch : Control
 
     public event EventHandler? CheckedChanged;
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool Checked
     {
         get => _checked;

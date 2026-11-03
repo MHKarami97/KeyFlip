@@ -9,7 +9,7 @@ public sealed class ConversionEngine : IDisposable
 
     private readonly KeyboardHook _hook = new();
     private readonly LayoutService _layout = new();
-    private readonly WordValidator _validator = new();
+    private readonly LanguageDetector _detector = new();
     private readonly TextReplacer _replacer = new();
     private readonly List<int> _buffer = new();
     private readonly SynchronizationContext _context;
@@ -79,16 +79,15 @@ public sealed class ConversionEngine : IDisposable
         var english = Build(keys, KeyMap.ToEnglish);
         var persian = Build(keys, KeyMap.ToPersian);
 
-        var canToPersian = Settings.Mode is ConversionMode.ToPersian or ConversionMode.Auto;
-        var canToEnglish = Settings.Mode is ConversionMode.ToEnglish or ConversionMode.Auto;
-
-        if (current == InputLanguage.English && canToPersian
-            && !_validator.IsEnglishWord(english) && _validator.IsPersianWord(persian))
+        if (current == InputLanguage.English
+            && Settings.Mode is ConversionMode.ToPersian or ConversionMode.Auto
+            && _detector.ShouldFlip(english, persian, current))
         {
             Apply(english.Length, persian, InputLanguage.Persian);
         }
-        else if (current == InputLanguage.Persian && canToEnglish
-                 && !_validator.IsPersianWord(persian) && _validator.IsEnglishWord(english))
+        else if (current == InputLanguage.Persian
+                 && Settings.Mode is ConversionMode.ToEnglish or ConversionMode.Auto
+                 && _detector.ShouldFlip(persian, english, current))
         {
             Apply(persian.Length, english, InputLanguage.English);
         }

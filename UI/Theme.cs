@@ -1,4 +1,5 @@
 ﻿using System.Drawing.Text;
+using System.Runtime.InteropServices;
 
 namespace KeyFlip.UI;
 
@@ -24,7 +25,7 @@ public static class Theme
             using var stream = assembly.GetManifestResourceStream(name)!;
             var data = new byte[stream.Length];
             stream.ReadExactly(data);
-            var handle = System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
             try
             {
                 Fonts.AddMemoryFont(handle.AddrOfPinnedObject(), data.Length);

@@ -1,0 +1,1 @@
+Put Vazirmatn-Regular.ttf here before publish: https://github.com/rastikerdar/vazirmatn/releases

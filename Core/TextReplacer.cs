@@ -12,23 +12,18 @@ public sealed class TextReplacer
 
         for (var i = 0; i < charsToDelete; i++)
         {
-            inputs.Add(VirtualKey(VkBack, keyUp: false));
-            inputs.Add(VirtualKey(VkBack, keyUp: true));
+            inputs.Add(Create(VkBack, 0, 0));
+            inputs.Add(Create(VkBack, 0, NativeMethods.KEYEVENTF_KEYUP));
         }
 
         foreach (var character in replacement)
         {
-            inputs.Add(Unicode(character, keyUp: false));
-            inputs.Add(Unicode(character, keyUp: true));
+            inputs.Add(Create(0, character, NativeMethods.KEYEVENTF_UNICODE));
+            inputs.Add(Create(0, character, NativeMethods.KEYEVENTF_UNICODE | NativeMethods.KEYEVENTF_KEYUP));
         }
 
         NativeMethods.SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<NativeMethods.INPUT>());
     }
-
-    private static NativeMethods.INPUT VirtualKey(ushort key, bool keyUp) => Create(key, 0, keyUp ? NativeMethods.KEYEVENTF_KEYUP : 0);
-
-    private static NativeMethods.INPUT Unicode(char character, bool keyUp) =>
-        Create(0, character, NativeMethods.KEYEVENTF_UNICODE | (keyUp ? NativeMethods.KEYEVENTF_KEYUP : 0));
 
     private static NativeMethods.INPUT Create(ushort key, ushort scan, uint flags) => new()
     {
