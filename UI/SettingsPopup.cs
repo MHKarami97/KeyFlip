@@ -1,16 +1,15 @@
 ﻿using System.Drawing.Drawing2D;
-using System.Runtime.InteropServices;
 using KeyFlip.Core;
 
 namespace KeyFlip.UI;
 
 public sealed class SettingsPopup : Form
 {
-    private const int DwmCornerPreference = 33;
-    private const int DwmRoundCorners = 2;
     private const int ClassDropShadow = 0x20000;
     private const int ExToolWindow = 0x80;
     private new const int Margin = 16;
+    private const int PopupWidth = 340;
+    private const int PopupHeight = 496;
     private const int EdgeGap = 12;
 
     private readonly AppSettings _settings;
@@ -18,6 +17,7 @@ public sealed class SettingsPopup : Form
     private readonly float _scale;
     private readonly Bitmap? _logo;
     private readonly System.Windows.Forms.Timer _fade = new() { Interval = 12 };
+    private ModeList? _modeList;
     private long _lastHiddenTick;
 
     public SettingsPopup(AppSettings settings, Action onChanged)
@@ -33,13 +33,14 @@ public sealed class SettingsPopup : Form
         TopMost = true;
         DoubleBuffered = true;
         BackColor = Theme.Background;
-        ClientSize = new Size(S(340), S(460));
+        ClientSize = new Size(S(PopupWidth), S(PopupHeight));
         Font = Theme.Create(10);
 
         BuildHeader();
         BuildModes();
         BuildToggle("تغییر زبان کیبورد", 324, _settings.SwitchKeyboardLayout, v => _settings.SwitchKeyboardLayout = v);
         BuildToggle("اجرا با روشن شدن ویندوز", 360, _settings.RunAtStartup, v => _settings.RunAtStartup = v);
+        BuildHotkeyRow(398);
         BuildExit();
 
         _fade.Tick += OnFadeTick;
@@ -71,8 +72,7 @@ public sealed class SettingsPopup : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        var preference = DwmRoundCorners;
-        DwmSetWindowAttribute(Handle, DwmCornerPreference, ref preference, sizeof(int));
+        Dwm.Apply(Handle);
     }
 
     protected override void OnVisibleChanged(EventArgs e)
@@ -138,35 +138,27 @@ public sealed class SettingsPopup : Form
 
     private void BuildModes()
     {
-        var hotkey = HotkeyFormatter.Format(_settings.HotkeyModifiers, _settings.HotkeyKey);
         var items = new[]
         {
             new ModeItem(ConversionMode.Off, "خاموش", "بدون هیچ تغییری"),
             new ModeItem(ConversionMode.ToEnglish, "انگلیسی", "فقط تبدیل فارسی به انگلیسی"),
             new ModeItem(ConversionMode.ToPersian, "فارسی", "فقط تبدیل انگلیسی به فارسی"),
             new ModeItem(ConversionMode.Auto, "خودکار", "تشخیص و تبدیل در هر دو جهت"),
-            new ModeItem(ConversionMode.Manual, "دستی", $"با میانبر {hotkey}")
+            new ModeItem(ConversionMode.Manual, "دستی", ManualSubtitle())
         };
 
-        var list = new ModeList(items, _settings.Mode, _scale) { Location = new Point(S(Margin), S(70)) };
-        list.ModeSelected += mode =>
+        _modeList = new ModeList(items, _settings.Mode, _scale) { Location = new Point(S(Margin), S(70)) };
+        _modeList.ModeSelected += mode =>
         {
             _settings.Mode = mode;
             _onChanged();
         };
-        Controls.Add(list);
+        Controls.Add(_modeList);
     }
 
     private void BuildToggle(string text, int top, bool value, Action<bool> setter)
     {
-        Controls.Add(new Label
-        {
-            Text = text,
-            ForeColor = Theme.Text,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleRight,
-            Bounds = new Rectangle(S(Margin) + S(52), S(top), S(340 - Margin * 2 - 52), S(28))
-        });
+        Controls.Add(CreateRowLabel(text, top, S(52)));
 
         var toggle = new ToggleSwitch
         {
@@ -183,16 +175,48 @@ public sealed class SettingsPopup : Form
         Controls.Add(toggle);
     }
 
+    private void BuildHotkeyRow(int top)
+    {
+        var boxWidth = S(150);
+        Controls.Add(CreateRowLabel("میانبر حالت دستی", top, boxWidth + S(8)));
+
+        var box = new HotkeyBox(_settings.HotkeyModifiers, _settings.HotkeyKey, _scale)
+        {
+            BackColor = Theme.Background,
+            Bounds = new Rectangle(S(Margin), S(top) + S(1), boxWidth, S(28))
+        };
+        box.HotkeyChanged += (modifiers, key) =>
+        {
+            _settings.HotkeyModifiers = modifiers;
+            _settings.HotkeyKey = key;
+            _modeList?.SetSubtitle(ConversionMode.Manual, ManualSubtitle());
+            _onChanged();
+        };
+        Controls.Add(box);
+    }
+
     private void BuildExit()
     {
         var exit = new ExitButton("خروج از برنامه", _scale)
         {
             BackColor = Theme.Background,
-            Bounds = new Rectangle(S(Margin), S(402), S(340 - Margin * 2), S(40))
+            Bounds = new Rectangle(S(Margin), S(440), S(PopupWidth - Margin * 2), S(40))
         };
         exit.Click += (_, _) => Application.Exit();
         Controls.Add(exit);
     }
+
+    private Label CreateRowLabel(string text, int top, int reservedLeft) => new()
+    {
+        Text = text,
+        ForeColor = Theme.Text,
+        AutoSize = false,
+        TextAlign = ContentAlignment.MiddleRight,
+        Bounds = new Rectangle(S(Margin) + reservedLeft, S(top), S(PopupWidth - Margin * 2) - reservedLeft, S(30))
+    };
+
+    private string ManualSubtitle() =>
+        $"با میانبر {HotkeyFormatter.Format(_settings.HotkeyModifiers, _settings.HotkeyKey)}";
 
     private Point ComputeLocation(Point anchor)
     {
@@ -250,7 +274,4 @@ public sealed class SettingsPopup : Form
     private static int ClampSafe(int value, int min, int max) => max < min ? min : Math.Clamp(value, min, max);
 
     private int S(int value) => (int)Math.Round(value * _scale);
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 }

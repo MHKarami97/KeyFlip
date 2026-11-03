@@ -22,13 +22,10 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!),
             Text = "KeyFlip",
-            Visible = true
+            Visible = true,
+            ContextMenuStrip = BuildMenu()
         };
         _tray.MouseClick += OnTrayClick;
-
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("خروج", null, (_, _) => Application.Exit());
-        _tray.ContextMenuStrip = menu;
 
         ApplyEngineMode();
     }
@@ -40,6 +37,33 @@ public sealed class TrayApplicationContext : ApplicationContext
         _popup.Dispose();
         _engine.Dispose();
         base.ExitThreadCore();
+    }
+
+    private ContextMenuStrip BuildMenu()
+    {
+        var menu = new ContextMenuStrip
+        {
+            Renderer = new DarkMenuRenderer(),
+            ShowImageMargin = false,
+            BackColor = Theme.Background,
+            ForeColor = Theme.Text,
+            Font = Theme.Create(10),
+            RightToLeft = RightToLeft.Yes,
+            Padding = new Padding(4),
+            MinimumSize = new Size(170, 0)
+        };
+
+        var settings = new ToolStripMenuItem("تنظیمات") { Padding = new Padding(10, 7, 10, 7) };
+        settings.Click += (_, _) => _popup.PresentNear(Cursor.Position);
+
+        var exit = new ToolStripMenuItem("خروج") { Tag = DarkMenuRenderer.DangerTag, Padding = new Padding(10, 7, 10, 7) };
+        exit.Click += (_, _) => Application.Exit();
+
+        menu.Items.Add(settings);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(exit);
+        menu.HandleCreated += (_, _) => Dwm.Apply(menu.Handle);
+        return menu;
     }
 
     private void OnTrayClick(object? sender, MouseEventArgs e)

@@ -8,7 +8,7 @@ public sealed record ModeItem(ConversionMode Mode, string Title, string Subtitle
 
 public sealed class ModeList : Control
 {
-    private readonly IReadOnlyList<ModeItem> _items;
+    private readonly ModeItem[] _items;
     private readonly float _scale;
     private readonly int _rowHeight;
     private readonly Font _titleFont = Theme.Create(10.5f);
@@ -16,22 +16,34 @@ public sealed class ModeList : Control
     private ConversionMode _selected;
     private int _hover = -1;
 
-    public ModeList(IReadOnlyList<ModeItem> items, ConversionMode selected, float scale)
+    public ModeList(IEnumerable<ModeItem> items, ConversionMode selected, float scale)
     {
-        _items = items;
+        _items = items.ToArray();
         _selected = selected;
         _scale = scale;
         _rowHeight = Scale(46);
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
-        Size = new Size(Scale(308), _rowHeight * items.Count);
+        Size = new Size(Scale(308), _rowHeight * _items.Length);
     }
 
     public event Action<ConversionMode>? ModeSelected;
 
+    public void SetSubtitle(ConversionMode mode, string subtitle)
+    {
+        var index = Array.FindIndex(_items, item => item.Mode == mode);
+        if (index < 0)
+        {
+            return;
+        }
+
+        _items[index] = _items[index] with { Subtitle = subtitle };
+        Invalidate();
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
-        var index = Math.Clamp(e.Y / _rowHeight, 0, _items.Count - 1);
+        var index = Math.Clamp(e.Y / _rowHeight, 0, _items.Length - 1);
         if (index != _hover)
         {
             _hover = index;
@@ -51,7 +63,7 @@ public sealed class ModeList : Control
     protected override void OnMouseClick(MouseEventArgs e)
     {
         var index = e.Y / _rowHeight;
-        if (e.Button == MouseButtons.Left && index >= 0 && index < _items.Count)
+        if (e.Button == MouseButtons.Left && index >= 0 && index < _items.Length)
         {
             _selected = _items[index].Mode;
             Invalidate();
@@ -75,7 +87,7 @@ public sealed class ModeList : Control
             Trimming = StringTrimming.EllipsisCharacter
         };
 
-        for (var i = 0; i < _items.Count; i++)
+        for (var i = 0; i < _items.Length; i++)
         {
             DrawRow(g, format, i);
         }
