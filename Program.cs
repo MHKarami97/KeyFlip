@@ -14,6 +14,7 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         Application.Run(new TrayApplicationContext());
     }
 }

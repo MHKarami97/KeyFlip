@@ -44,6 +44,8 @@ public sealed class ConversionEngine : IDisposable
 
         if (virtualKey == VkSpace)
         {
+            DebugLog.Write($"space: layout={language} buffer={_buffer.Count}");
+
             var word = _buffer.ToArray();
             _buffer.Clear();
             if (word.Length > 1)
@@ -78,6 +80,7 @@ public sealed class ConversionEngine : IDisposable
     {
         var english = Build(keys, KeyMap.ToEnglish);
         var persian = Build(keys, KeyMap.ToPersian);
+        DebugLog.Write($"layout={current} mode={Settings.Mode} en='{english}' fa='{persian}' ready={_detector.IsReady}");
 
         if (current == InputLanguage.English
             && Settings.Mode is ConversionMode.ToPersian or ConversionMode.Auto

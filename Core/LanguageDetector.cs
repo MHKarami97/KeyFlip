@@ -56,28 +56,36 @@ public sealed class LanguageDetector
 
     private void Initialize()
     {
-        foreach (var line in ReadAllLines("en.txt"))
+        try
         {
-            var word = NormalizeEnglish(line);
-            if (word is not null)
+            foreach (var line in ReadAllLines("en.txt"))
             {
-                _english.Add(word);
+                var word = NormalizeEnglish(line);
+                if (word is not null)
+                {
+                    _english.Add(word);
+                }
             }
-        }
 
-        foreach (var line in ReadAllLines("fa.txt"))
+            foreach (var line in ReadAllLines("fa.txt"))
+            {
+                var word = NormalizePersian(line);
+                if (word is not null)
+                {
+                    _persian.Add(word);
+                }
+            }
+
+            _englishModel.Train(_english);
+            _persianModel.Train(_persian);
+            _ngramEnabled = _english.Count >= MinWordsForNgram && _persian.Count >= MinWordsForNgram;
+            _ready = true;
+            DebugLog.Write($"Detector ready. en={_english.Count}, fa={_persian.Count}, ngram={_ngramEnabled}");
+        }
+        catch (Exception ex)
         {
-            var word = NormalizePersian(line);
-            if (word is not null)
-            {
-                _persian.Add(word);
-            }
+            DebugLog.Write($"Detector init failed: {ex}");
         }
-
-        _englishModel.Train(_english);
-        _persianModel.Train(_persian);
-        _ngramEnabled = _english.Count >= MinWordsForNgram && _persian.Count >= MinWordsForNgram;
-        _ready = true;
     }
 
     private static string? NormalizeEnglish(string raw)
