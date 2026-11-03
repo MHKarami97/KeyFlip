@@ -189,3 +189,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full g
 - Font: [Vazirmatn](https://github.com/rastikerdar/vazirmatn)
 
 The application code is licensed under the MIT License (see [LICENSE](LICENSE)). The data and the font have their own licenses; before redistributing the exe or the `Data/*.txt` files, check each source's terms (including the share-alike condition of CC BY-SA).
+
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/mhkarami97/keyflip?utm_source=readme&utm_medium=badge)
+  
+![GitHub Release](https://img.shields.io/github/v/release/mhkarami97/KeyFlip)
