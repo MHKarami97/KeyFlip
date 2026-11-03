@@ -4,7 +4,7 @@ namespace KeyFlip.Core;
 
 public static class DebugLog
 {
-    private static readonly string Path = System.IO.Path.Combine(
+    private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KeyFlip", "debug.log");
 
     [Conditional("DEBUG")]
@@ -12,7 +12,7 @@ public static class DebugLog
     {
         try
         {
-            File.AppendAllText(Path, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
+            File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
         }
         catch (IOException)
         {

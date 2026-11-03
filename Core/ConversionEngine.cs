@@ -11,24 +11,44 @@ public sealed class ConversionEngine : IDisposable
     private readonly LayoutService _layout = new();
     private readonly LanguageDetector _detector = new();
     private readonly TextReplacer _replacer = new();
+    private readonly HotkeyWindow _hotkey = new();
+    private readonly ManualConverter _manual;
     private readonly List<int> _buffer = new();
     private readonly object _sendLock = new();
 
     public ConversionEngine(AppSettings settings)
     {
         Settings = settings;
+        _manual = new ManualConverter(settings);
         _hook.KeyPressed = OnKeyPressed;
+        _hotkey.Pressed += _manual.Run;
     }
 
     public AppSettings Settings { get; }
 
     public void Start() => _hook.Start();
 
-    public void Dispose() => _hook.Dispose();
+    /// <summary>Registers or releases the manual hotkey. Returns false if the hotkey is taken.</summary>
+    public bool ApplyMode()
+    {
+        if (Settings.Mode == ConversionMode.Manual)
+        {
+            return _hotkey.Register(Settings.HotkeyModifiers, Settings.HotkeyKey);
+        }
+
+        _hotkey.Unregister();
+        return true;
+    }
+
+    public void Dispose()
+    {
+        _hook.Dispose();
+        _hotkey.Dispose();
+    }
 
     private bool OnKeyPressed(int virtualKey)
     {
-        if (Settings.Mode == ConversionMode.Off || IsModifierDown())
+        if (Settings.Mode is ConversionMode.Off or ConversionMode.Manual || IsModifierDown())
         {
             _buffer.Clear();
             return false;

@@ -24,30 +24,56 @@ public sealed class TrayApplicationContext : ApplicationContext
             Text = "KeyFlip",
             Visible = true
         };
-        _tray.MouseClick += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                _popup.ShowNearTray();
-            }
-        };
+        _tray.MouseClick += OnTrayClick;
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("خروج", null, (_, _) => Application.Exit());
         _tray.ContextMenuStrip = menu;
+
+        ApplyEngineMode();
     }
 
     protected override void ExitThreadCore()
     {
         _tray.Visible = false;
         _tray.Dispose();
+        _popup.Dispose();
         _engine.Dispose();
         base.ExitThreadCore();
+    }
+
+    private void OnTrayClick(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left)
+        {
+            return;
+        }
+
+        if (_popup.Visible)
+        {
+            _popup.Hide();
+            return;
+        }
+
+        // The popup hides itself on deactivation, which happens before this click event fires.
+        if (!_popup.WasHiddenRecently())
+        {
+            _popup.PresentNear(Cursor.Position);
+        }
     }
 
     private void OnSettingsChanged()
     {
         _store.Save(_settings);
         _startup.Apply(_settings.RunAtStartup);
+        ApplyEngineMode();
+    }
+
+    private void ApplyEngineMode()
+    {
+        if (!_engine.ApplyMode())
+        {
+            _tray.ShowBalloonTip(4000, "KeyFlip", "میانبر انتخاب‌شده توسط برنامه دیگری اشغال شده است.", ToolTipIcon.Warning);
+        }
     }
 }

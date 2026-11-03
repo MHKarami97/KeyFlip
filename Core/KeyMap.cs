@@ -4,6 +4,8 @@ public static class KeyMap
 {
     private static readonly Dictionary<int, (char English, char Persian)> Keys = Build();
 
+    public static IEnumerable<int> AllKeys => Keys.Keys;
+
     public static bool IsLetterKey(int virtualKey) => virtualKey is >= 0x41 and <= 0x5A;
 
     public static bool IsMapped(int virtualKey, bool persianLayout) =>
