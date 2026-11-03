@@ -5,6 +5,9 @@ namespace KeyFlip.Core;
 public sealed class KeyboardHook : IDisposable
 {
     private readonly NativeMethods.LowLevelKeyboardProc _callback;
+    private readonly ManualResetEventSlim _started = new(false);
+    private Thread? _thread;
+    private uint _threadId;
     private IntPtr _handle = IntPtr.Zero;
 
     public KeyboardHook()
@@ -12,17 +15,20 @@ public sealed class KeyboardHook : IDisposable
         _callback = OnKey;
     }
 
-    public event Action<int>? KeyPressed;
+    /// <summary>Return true to swallow the key.</summary>
+    public Func<int, bool>? KeyPressed { get; set; }
 
     public void Start()
     {
-        if (_handle != IntPtr.Zero)
+        if (_thread is not null)
         {
             return;
         }
 
-        var module = NativeMethods.GetModuleHandle(null);
-        _handle = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _callback, module, 0);
+        _thread = new Thread(Run) { IsBackground = true, Name = "KeyFlip.Hook" };
+        _thread.Start();
+        _started.Wait();
+
         if (_handle == IntPtr.Zero)
         {
             throw new InvalidOperationException("Cannot install keyboard hook.");
@@ -31,9 +37,32 @@ public sealed class KeyboardHook : IDisposable
 
     public void Dispose()
     {
+        if (_thread is null)
+        {
+            return;
+        }
+
+        NativeMethods.PostThreadMessage(_threadId, NativeMethods.WM_QUIT, UIntPtr.Zero, IntPtr.Zero);
+        _thread.Join(1000);
+        _thread = null;
+    }
+
+    private void Run()
+    {
+        _threadId = NativeMethods.GetCurrentThreadId();
+        _handle = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _callback,
+            NativeMethods.GetModuleHandle(null), 0);
+        _started.Set();
+
         if (_handle == IntPtr.Zero)
         {
             return;
+        }
+
+        while (NativeMethods.GetMessage(out var message, IntPtr.Zero, 0, 0) > 0)
+        {
+            NativeMethods.TranslateMessage(ref message);
+            NativeMethods.DispatchMessage(ref message);
         }
 
         NativeMethods.UnhookWindowsHookEx(_handle);
@@ -45,9 +74,9 @@ public sealed class KeyboardHook : IDisposable
         if (code >= 0 && ((int)wParam is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN))
         {
             var data = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
-            if ((data.flags & NativeMethods.LLKHF_INJECTED) == 0)
+            if ((data.flags & NativeMethods.LLKHF_INJECTED) == 0 && KeyPressed?.Invoke((int)data.vkCode) == true)
             {
-                KeyPressed?.Invoke((int)data.vkCode);
+                return (IntPtr)1;
             }
         }
 

@@ -27,12 +27,14 @@ public sealed class LanguageDetector
     {
         if (!_ready || typed.Length < 2)
         {
+            DebugLog.Write($"skip: ready={_ready} len={typed.Length}");
             return false;
         }
 
         var typedIsEnglish = current == InputLanguage.English;
         var typedKnown = typedIsEnglish ? _english.Contains(typed) : _persian.Contains(typed);
         var alternativeKnown = typedIsEnglish ? _persian.Contains(alternative) : _english.Contains(alternative);
+        DebugLog.Write($"typed='{typed}' known={typedKnown}; alt='{alternative}' known={alternativeKnown}; ngram={_ngramEnabled}");
 
         if (typedKnown)
         {
@@ -51,6 +53,7 @@ public sealed class LanguageDetector
 
         var typedScore = typedIsEnglish ? _englishModel.Score(typed) : _persianModel.Score(typed);
         var alternativeScore = typedIsEnglish ? _persianModel.Score(alternative) : _englishModel.Score(alternative);
+        DebugLog.Write($"scores typed={typedScore:F2} alt={alternativeScore:F2}");
         return alternativeScore - typedScore > Margin;
     }
 

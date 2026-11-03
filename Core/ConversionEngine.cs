@@ -12,13 +12,12 @@ public sealed class ConversionEngine : IDisposable
     private readonly LanguageDetector _detector = new();
     private readonly TextReplacer _replacer = new();
     private readonly List<int> _buffer = new();
-    private readonly SynchronizationContext _context;
+    private readonly object _sendLock = new();
 
     public ConversionEngine(AppSettings settings)
     {
         Settings = settings;
-        _context = SynchronizationContext.Current ?? new SynchronizationContext();
-        _hook.KeyPressed += OnKeyPressed;
+        _hook.KeyPressed = OnKeyPressed;
     }
 
     public AppSettings Settings { get; }
@@ -27,33 +26,24 @@ public sealed class ConversionEngine : IDisposable
 
     public void Dispose() => _hook.Dispose();
 
-    private void OnKeyPressed(int virtualKey)
+    private bool OnKeyPressed(int virtualKey)
     {
         if (Settings.Mode == ConversionMode.Off || IsModifierDown())
         {
             _buffer.Clear();
-            return;
+            return false;
         }
 
         var language = _layout.GetCurrent();
         if (language == InputLanguage.Other)
         {
             _buffer.Clear();
-            return;
+            return false;
         }
 
         if (virtualKey == VkSpace)
         {
-            DebugLog.Write($"space: layout={language} buffer={_buffer.Count}");
-
-            var word = _buffer.ToArray();
-            _buffer.Clear();
-            if (word.Length > 1)
-            {
-                _context.Post(_ => TryConvert(word, language), null);
-            }
-
-            return;
+            return HandleSpace(language);
         }
 
         if (virtualKey == VkBack)
@@ -63,7 +53,7 @@ public sealed class ConversionEngine : IDisposable
                 _buffer.RemoveAt(_buffer.Count - 1);
             }
 
-            return;
+            return false;
         }
 
         if (KeyMap.IsMapped(virtualKey, language == InputLanguage.Persian))
@@ -74,34 +64,60 @@ public sealed class ConversionEngine : IDisposable
         {
             _buffer.Clear();
         }
+
+        return false;
     }
 
-    private void TryConvert(int[] keys, InputLanguage current)
+    private bool HandleSpace(InputLanguage language)
+    {
+        var keys = _buffer.ToArray();
+        _buffer.Clear();
+        if (keys.Length < 2)
+        {
+            return false;
+        }
+
+        var plan = CreatePlan(keys, language);
+        if (plan is null)
+        {
+            return false;
+        }
+
+        Task.Run(() => Execute(plan));
+        return true;
+    }
+
+    private ConversionPlan? CreatePlan(int[] keys, InputLanguage current)
     {
         var english = Build(keys, KeyMap.ToEnglish);
         var persian = Build(keys, KeyMap.ToPersian);
-        DebugLog.Write($"layout={current} mode={Settings.Mode} en='{english}' fa='{persian}' ready={_detector.IsReady}");
 
         if (current == InputLanguage.English
             && Settings.Mode is ConversionMode.ToPersian or ConversionMode.Auto
             && _detector.ShouldFlip(english, persian, current))
         {
-            Apply(english.Length, persian, InputLanguage.Persian);
+            return new ConversionPlan(english.Length, persian, InputLanguage.Persian);
         }
-        else if (current == InputLanguage.Persian
-                 && Settings.Mode is ConversionMode.ToEnglish or ConversionMode.Auto
-                 && _detector.ShouldFlip(persian, english, current))
+
+        if (current == InputLanguage.Persian
+            && Settings.Mode is ConversionMode.ToEnglish or ConversionMode.Auto
+            && _detector.ShouldFlip(persian, english, current))
         {
-            Apply(persian.Length, english, InputLanguage.English);
+            return new ConversionPlan(persian.Length, english, InputLanguage.English);
         }
+
+        return null;
     }
 
-    private void Apply(int wordLength, string replacement, InputLanguage target)
+    private void Execute(ConversionPlan plan)
     {
-        _replacer.Replace(wordLength + 1, replacement + " ");
-        if (Settings.SwitchKeyboardLayout)
+        lock (_sendLock)
         {
-            _layout.Switch(target);
+            _replacer.Replace(plan.WordLength, plan.Replacement + " ");
+            if (Settings.SwitchKeyboardLayout)
+            {
+                _layout.Switch(plan.Target);
+            }
         }
     }
 
@@ -121,4 +137,6 @@ public sealed class ConversionEngine : IDisposable
         || IsDown(NativeMethods.VK_LWIN) || IsDown(NativeMethods.VK_RWIN);
 
     private static bool IsDown(int key) => (NativeMethods.GetAsyncKeyState(key) & 0x8000) != 0;
+
+    private sealed record ConversionPlan(int WordLength, string Replacement, InputLanguage Target);
 }
