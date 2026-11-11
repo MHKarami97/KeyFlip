@@ -296,41 +296,41 @@ stateDiagram-v2
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant HW as HotkeyWindow (WM_HOTKEY)
-    participant MC as ManualConverter (STA Worker)
-    participant TR as TextReplacer (SendInput)
-    participant CB as Win32 Clipboard + ClipboardWatcher
+    participant HW as HotkeyWindow WM_HOTKEY
+    participant MC as ManualConverter STA Worker
+    participant TR as TextReplacer SendInput
+    participant CB as Win32 Clipboard and Watcher
     participant APP as Active Window
 
-    U->>HW: Press Hotkey (default Ctrl+Alt+Space)
+    U->>HW: Press Hotkey Ctrl-Alt-Space
     HW->>MC: Signal AutoResetEvent
-    MC->>TR: ReleaseHeldModifiers (0xE8 mask + KEYUP)
-    TR->>APP: Logical release of Ctrl / Alt / Shift / Win
+    MC->>TR: ReleaseHeldModifiers 0xE8 mask and KEYUP
+    TR->>APP: Logical release of Ctrl Alt Shift Win
     MC->>CB: Backup existing CF_UNICODETEXT
 
-    MC->>APP: Check GUIThreadInfo + EM_GETSEL
+    MC->>APP: Check GUIThreadInfo and EM_GETSEL
     alt Classic Edit control with no selection
         MC->>MC: Skip selection copy immediately
-    else Unknown or custom control (Browser, Electron, Word)
-        MC->>CB: EmptyClipboard + ResetAfter(seq)
-        MC->>TR: SendChord(Ctrl + C)
-        CB-->>MC: WM_CLIPBOARDUPDATE wakes waiter (up to 130ms)
+    else Unknown or custom control like Browser Electron Word
+        MC->>CB: EmptyClipboard and ResetAfter seq
+        MC->>TR: SendChord Ctrl-C
+        CB-->>MC: WM_CLIPBOARDUPDATE wakes waiter up to 130ms
     end
 
     opt No selection found
-        MC->>TR: SendChord(Ctrl + A)
-        MC->>MC: Wait SelectAllSettleMs (35ms)
-        MC->>CB: EmptyClipboard + ResetAfter(seq)
-        MC->>TR: SendChord(Ctrl + C)
-        CB-->>MC: WM_CLIPBOARDUPDATE wakes waiter (up to 250ms)
+        MC->>TR: SendChord Ctrl-A
+        MC->>MC: Wait SelectAllSettleMs 35ms
+        MC->>CB: EmptyClipboard and ResetAfter seq
+        MC->>TR: SendChord Ctrl-C
+        CB-->>MC: WM_CLIPBOARDUPDATE wakes waiter up to 250ms
     end
 
     MC->>MC: TextConverter.Convert or ConvertEachWord
-    MC->>CB: SetClipboardText (GlobalAlloc Unicode)
-    MC->>TR: SendChord(Ctrl + V)
-    MC->>APP: LayoutService.Switch(target) if enabled
-    MC->>MC: Wait PasteSettleMs (140ms)
-    MC->>CB: RestoreClipboard(original backup)
+    MC->>CB: SetClipboardText GlobalAlloc Unicode
+    MC->>TR: SendChord Ctrl-V
+    MC->>APP: LayoutService.Switch target if enabled
+    MC->>MC: Wait PasteSettleMs 140ms
+    MC->>CB: RestoreClipboard original backup
 ```
 
 </div>
