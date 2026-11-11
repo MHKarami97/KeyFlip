@@ -1,10 +1,11 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 
 namespace KeyFlip.UI;
 
 public sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
 {
     public const string DangerTag = "danger";
+    public const string AccentTag = "accent";
 
     public DarkMenuRenderer() : base(new DarkColorTable())
     {
@@ -22,7 +23,11 @@ public sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var bounds = new Rectangle(4, 2, e.Item.Width - 8, e.Item.Height - 4);
         using var path = Theme.RoundedRect(bounds, 8);
-        var color = Equals(e.Item.Tag, DangerTag) ? Color.FromArgb(38, Theme.Danger) : Theme.Surface;
+        var color = Equals(e.Item.Tag, DangerTag)
+            ? Color.FromArgb(38, Theme.Danger)
+            : Equals(e.Item.Tag, AccentTag)
+                ? Color.FromArgb(30, Theme.Success)
+                : Theme.Surface;
         using var brush = new SolidBrush(color);
         g.FillPath(brush, path);
     }
@@ -30,9 +35,10 @@ public sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
         var danger = Equals(e.Item.Tag, DangerTag);
+        var accent = Equals(e.Item.Tag, AccentTag);
         e.TextColor = e.Item.Selected
-            ? (danger ? Theme.Danger : Theme.Text)
-            : (danger ? Color.FromArgb(200, Theme.Danger) : Theme.Text);
+            ? (danger ? Theme.Danger : accent ? Theme.Success : Theme.Text)
+            : (danger ? Color.FromArgb(200, Theme.Danger) : accent ? Theme.Success : Theme.Text);
         base.OnRenderItemText(e);
     }
 

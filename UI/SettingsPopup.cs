@@ -1,4 +1,5 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using KeyFlip.Core;
 
 namespace KeyFlip.UI;
@@ -10,22 +11,28 @@ public sealed class SettingsPopup : Form
     private new const int Margin = 16;
     private const int PopupWidth = 340;
     private const int PopupHeight = 496;
+    private const int PopupHeightWithUpdate = 546;
     private const int EdgeGap = 12;
 
     private readonly AppSettings _settings;
     private readonly Action _onChanged;
     private readonly Action _openAdvanced;
+    private readonly Action _openReleasePage;
     private readonly float _scale;
     private readonly Bitmap? _logo;
     private readonly System.Windows.Forms.Timer _fade = new() { Interval = 12 };
     private ModeList? _modeList;
+    private ActionButton? _advancedButton;
+    private ActionButton? _exitButton;
+    private UpdateBanner? _updateBanner;
     private long _lastHiddenTick;
 
-    public SettingsPopup(AppSettings settings, Action onChanged, Action openAdvanced)
+    public SettingsPopup(AppSettings settings, Action onChanged, Action openAdvanced, Action openReleasePage)
     {
         _settings = settings;
         _onChanged = onChanged;
         _openAdvanced = openAdvanced;
+        _openReleasePage = openReleasePage;
         _scale = GetScale();
         _logo = LoadLogo();
 
@@ -118,6 +125,16 @@ public sealed class SettingsPopup : Form
     private void BuildHeader()
     {
         var right = Width - S(Margin) - S(36) - S(12);
+        var versionWidth = S(76);
+        Controls.Add(new Label
+        {
+            Text = $"v{UpdateChecker.FormatVersion(UpdateChecker.ReadAssemblyVersion())}",
+            Font = Theme.Create(8.5f),
+            ForeColor = Theme.Muted,
+            AutoSize = false,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Bounds = new Rectangle(S(Margin), S(18), versionWidth, S(20))
+        });
         Controls.Add(new Label
         {
             Text = "KeyFlip",
@@ -125,7 +142,7 @@ public sealed class SettingsPopup : Form
             ForeColor = Theme.Text,
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleRight,
-            Bounds = new Rectangle(S(Margin), S(16), right - S(Margin), S(24))
+            Bounds = new Rectangle(S(Margin) + versionWidth + S(4), S(16), right - S(Margin) - versionWidth - S(4), S(24))
         });
         Controls.Add(new Label
         {
@@ -197,26 +214,72 @@ public sealed class SettingsPopup : Form
         Controls.Add(box);
     }
 
+    public void SetUpdateStatus(UpdateStatus status)
+    {
+        if (_updateBanner is null || _advancedButton is null || _exitButton is null)
+        {
+            return;
+        }
+
+        var showUpdate = status.IsUpdateAvailable && !string.IsNullOrWhiteSpace(status.LatestTag);
+        if (showUpdate)
+        {
+            _updateBanner.Text = $"نسخه جدید {status.LatestTag} منتشر شد — دریافت";
+        }
+
+        _updateBanner.Visible = showUpdate;
+        var buttonsTop = S(showUpdate ? 490 : 440);
+        _advancedButton.Top = buttonsTop;
+        _exitButton.Top = buttonsTop;
+
+        var targetHeight = S(showUpdate ? PopupHeightWithUpdate : PopupHeight);
+        if (ClientSize.Height != targetHeight)
+        {
+            var delta = targetHeight - ClientSize.Height;
+            ClientSize = new Size(S(PopupWidth), targetHeight);
+            if (Visible)
+            {
+                var work = Screen.FromControl(this).WorkingArea;
+                Top = ClampSafe(Top - delta, work.Top + S(EdgeGap), work.Bottom - Height - S(EdgeGap));
+            }
+        }
+
+        Invalidate();
+    }
+
     private void BuildActions()
     {
         var contentWidth = PopupWidth - Margin * 2;
         var buttonWidth = (contentWidth - 8) / 2;
 
-        var advanced = new ActionButton("تنظیمات پیشرفته", _scale, Theme.Accent)
+        _updateBanner = new UpdateBanner(_scale)
+        {
+            BackColor = Theme.Background,
+            Bounds = new Rectangle(S(Margin), S(438), S(contentWidth), S(42)),
+            Visible = false
+        };
+        _updateBanner.Click += (_, _) =>
+        {
+            Hide();
+            _openReleasePage();
+        };
+        Controls.Add(_updateBanner);
+
+        _advancedButton = new ActionButton("تنظیمات پیشرفته", _scale, Theme.Accent)
         {
             BackColor = Theme.Background,
             Bounds = new Rectangle(S(Margin) + S(buttonWidth + 8), S(440), S(buttonWidth), S(40))
         };
-        advanced.Click += (_, _) => _openAdvanced();
-        Controls.Add(advanced);
+        _advancedButton.Click += (_, _) => _openAdvanced();
+        Controls.Add(_advancedButton);
 
-        var exit = new ActionButton("خروج", _scale, Theme.Danger, powerIcon: true)
+        _exitButton = new ActionButton("خروج", _scale, Theme.Danger, powerIcon: true)
         {
             BackColor = Theme.Background,
             Bounds = new Rectangle(S(Margin), S(440), S(buttonWidth), S(40))
         };
-        exit.Click += (_, _) => Application.Exit();
-        Controls.Add(exit);
+        _exitButton.Click += (_, _) => Application.Exit();
+        Controls.Add(_exitButton);
     }
 
     private Label CreateRowLabel(string text, int top, int reservedLeft) => new()
@@ -287,4 +350,84 @@ public sealed class SettingsPopup : Form
     private static int ClampSafe(int value, int min, int max) => max < min ? min : Math.Clamp(value, min, max);
 
     private int S(int value) => (int)Math.Round(value * _scale);
+
+    private sealed class UpdateBanner : Control
+    {
+        private readonly float _scale;
+        private readonly Font _font = Theme.Create(9.5f);
+        private bool _hover;
+        private bool _pressed;
+
+        public UpdateBanner(float scale)
+        {
+            _scale = scale;
+            DoubleBuffered = true;
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            _hover = true;
+            Invalidate();
+            base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _hover = false;
+            _pressed = false;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            _pressed = true;
+            Invalidate();
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            _pressed = false;
+            Invalidate();
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            g.Clear(Parent?.BackColor ?? Theme.Background);
+
+            var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = Theme.RoundedRect(bounds, (int)(10 * _scale));
+            var fillAlpha = _pressed ? 55 : _hover ? 38 : 24;
+            using var fill = new SolidBrush(Color.FromArgb(fillAlpha, Theme.Success));
+            g.FillPath(fill, path);
+
+            using var border = new Pen(Color.FromArgb(_hover ? 230 : 160, Theme.Success));
+            g.DrawPath(border, path);
+
+            var textBounds = new Rectangle((int)(10 * _scale), 0, Width - (int)(20 * _scale), Height);
+            TextRenderer.DrawText(
+                g,
+                Text,
+                _font,
+                textBounds,
+                Theme.Success,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.RightToLeft | TextFormatFlags.EndEllipsis);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _font.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
 }

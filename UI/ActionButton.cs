@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 
 namespace KeyFlip.UI;
@@ -6,7 +6,7 @@ namespace KeyFlip.UI;
 public sealed class ActionButton : Control
 {
     private readonly float _scale;
-    private readonly Color _accent;
+    private Color _accent;
     private readonly bool _powerIcon;
     private readonly Font _font = Theme.Create(10);
     private bool _hover;
@@ -20,6 +20,13 @@ public sealed class ActionButton : Control
         _powerIcon = powerIcon;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+    }
+
+    public void SetAppearance(string text, Color accent)
+    {
+        Text = text;
+        _accent = accent;
+        Invalidate();
     }
 
     protected override void OnMouseEnter(EventArgs e)

@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 
@@ -14,6 +14,7 @@ public static class Theme
     public static readonly Color Border = Color.FromArgb(63, 63, 70);
     public static readonly Color Accent = Color.FromArgb(99, 102, 241);
     public static readonly Color AccentSoft = Color.FromArgb(38, 99, 102, 241);
+    public static readonly Color Success = Color.FromArgb(74, 222, 128);
     public static readonly Color Danger = Color.FromArgb(248, 113, 113);
     public static readonly Color Text = Color.FromArgb(244, 244, 245);
     public static readonly Color Muted = Color.FromArgb(161, 161, 170);

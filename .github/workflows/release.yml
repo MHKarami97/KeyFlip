@@ -26,7 +26,10 @@ jobs:
         run: python tools/prepare_data.py
 
       - name: Publish single-file exe
-        run: dotnet publish KeyFlip.csproj -c Release -o publish
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v', 'V')
+          dotnet publish KeyFlip.csproj -c Release -p:Version=$version -o publish
 
       - name: Create GitHub release
         shell: pwsh

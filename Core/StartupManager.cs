@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 
 namespace KeyFlip.Core;
 
@@ -6,6 +6,7 @@ public sealed class StartupManager
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "KeyFlip";
+    public const string StartupArg = "--startup";
 
     public void Apply(bool enabled)
     {
@@ -17,7 +18,7 @@ public sealed class StartupManager
 
         if (enabled)
         {
-            key.SetValue(ValueName, $"\"{Environment.ProcessPath}\"");
+            key.SetValue(ValueName, $"\"{Environment.ProcessPath}\" {StartupArg}");
         }
         else
         {
