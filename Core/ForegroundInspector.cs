@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -12,20 +12,40 @@ public sealed class ForegroundInspector
     private const int EsPassword = 0x20;
 
     private readonly string _selfName = Process.GetCurrentProcess().ProcessName;
+    private readonly StringBuilder _classNameBuffer = new(64);
     private IntPtr _cachedWindow = IntPtr.Zero;
     private string _cachedName = string.Empty;
 
-    public bool ShouldIgnore(IEnumerable<string> excludedApps)
+    public (IntPtr Window, IntPtr FocusWindow) GetFocusHandles()
     {
-        var name = GetProcessName();
-        return string.Equals(name, _selfName, StringComparison.OrdinalIgnoreCase)
-               || excludedApps.Any(app => string.Equals(app, name, StringComparison.OrdinalIgnoreCase))
-               || IsPasswordFieldFocused();
+        var window = NativeMethods.GetForegroundWindow();
+        if (window == IntPtr.Zero)
+        {
+            return (IntPtr.Zero, IntPtr.Zero);
+        }
+
+        var thread = NativeMethods.GetWindowThreadProcessId(window, out _);
+        var info = new NativeMethods.GUITHREADINFO { cbSize = Marshal.SizeOf<NativeMethods.GUITHREADINFO>() };
+        var focus = NativeMethods.GetGUIThreadInfo(thread, ref info) ? info.hwndFocus : IntPtr.Zero;
+        return (window, focus);
     }
 
-    private string GetProcessName()
+    public bool ShouldIgnore(IEnumerable<string> excludedApps)
     {
-        var window = GetForegroundWindow();
+        var window = NativeMethods.GetForegroundWindow();
+        if (window == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var name = GetProcessName(window);
+        return string.Equals(name, _selfName, StringComparison.OrdinalIgnoreCase)
+               || excludedApps.Any(app => string.Equals(app, name, StringComparison.OrdinalIgnoreCase))
+               || IsPasswordFieldFocused(window);
+    }
+
+    private string GetProcessName(IntPtr window)
+    {
         if (window != _cachedWindow)
         {
             _cachedWindow = window;
@@ -37,7 +57,12 @@ public sealed class ForegroundInspector
 
     private static string ResolveName(IntPtr window)
     {
-        GetWindowThreadProcessId(window, out var processId);
+        NativeMethods.GetWindowThreadProcessId(window, out var processId);
+        if (processId == 0)
+        {
+            return string.Empty;
+        }
+
         var handle = OpenProcess(ProcessQueryLimitedInformation, false, processId);
         if (handle == IntPtr.Zero)
         {
@@ -58,59 +83,20 @@ public sealed class ForegroundInspector
         }
     }
 
-    private static bool IsPasswordFieldFocused()
+    private bool IsPasswordFieldFocused(IntPtr window)
     {
-        var thread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
-        var info = new GuiThreadInfo { cbSize = Marshal.SizeOf<GuiThreadInfo>() };
-        if (!GetGUIThreadInfo(thread, ref info) || info.hwndFocus == IntPtr.Zero)
+        var thread = NativeMethods.GetWindowThreadProcessId(window, out _);
+        var info = new NativeMethods.GUITHREADINFO { cbSize = Marshal.SizeOf<NativeMethods.GUITHREADINFO>() };
+        if (!NativeMethods.GetGUIThreadInfo(thread, ref info) || info.hwndFocus == IntPtr.Zero)
         {
             return false;
         }
 
-        var className = new StringBuilder(64);
-        GetClassName(info.hwndFocus, className, className.Capacity);
-        return className.ToString().Contains("Edit", StringComparison.OrdinalIgnoreCase)
-               && (GetWindowLong(info.hwndFocus, GwlStyle) & EsPassword) != 0;
+        _classNameBuffer.Clear();
+        NativeMethods.GetClassName(info.hwndFocus, _classNameBuffer, _classNameBuffer.Capacity);
+        return _classNameBuffer.ToString().Contains("Edit", StringComparison.OrdinalIgnoreCase)
+               && (NativeMethods.GetWindowLong(info.hwndFocus, GwlStyle) & EsPassword) != 0;
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Rect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct GuiThreadInfo
-    {
-        public int cbSize;
-        public uint flags;
-        public IntPtr hwndActive;
-        public IntPtr hwndFocus;
-        public IntPtr hwndCapture;
-        public IntPtr hwndMenuOwner;
-        public IntPtr hwndMoveSize;
-        public IntPtr hwndCaret;
-        public Rect rcCaret;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetGUIThreadInfo(uint idThread, ref GuiThreadInfo info);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr hWnd, StringBuilder className, int maxCount);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
-    private static extern int GetWindowLong(IntPtr hWnd, int index);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);

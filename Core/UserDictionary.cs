@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 namespace KeyFlip.Core;
 
@@ -6,29 +6,47 @@ namespace KeyFlip.Core;
 public sealed class UserDictionary
 {
     private const int PromotionThreshold = 2;
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     private readonly object _gate = new();
+    private readonly object _writeLock = new();
     private readonly string _path;
     private readonly HashSet<string> _never;
     private readonly HashSet<string> _always;
     private readonly Dictionary<string, int> _accepted;
     private int _saveScheduled;
+    private volatile bool _dirty;
 
-    public UserDictionary()
+    public UserDictionary(string? path = null)
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KeyFlip");
-        Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, "user-words.json");
+        if (path is not null)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            _path = path;
+        }
+        else
+        {
+            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KeyFlip");
+            Directory.CreateDirectory(folder);
+            _path = Path.Combine(folder, "user-words.json");
+        }
 
         var data = Read();
-        _never = new HashSet<string>(data.NeverConvert);
-        _always = new HashSet<string>(data.AlwaysConvert);
-        _accepted = new Dictionary<string, int>(data.Accepted);
+        _never = new HashSet<string>(data.NeverConvert.Select(Normalize).Where(w => w.Length > 0));
+        _always = new HashSet<string>(data.AlwaysConvert.Select(Normalize).Where(w => w.Length > 0));
+        _accepted = new Dictionary<string, int>();
+        foreach (var (word, count) in data.Accepted)
+        {
+            var normalized = Normalize(word);
+            if (normalized.Length > 0)
+            {
+                _accepted[normalized] = Math.Max(_accepted.GetValueOrDefault(normalized), count);
+            }
+        }
     }
 
     public bool IsNeverConvert(string word)
     {
+        word = Normalize(word);
         lock (_gate)
         {
             return _never.Contains(word);
@@ -37,6 +55,7 @@ public sealed class UserDictionary
 
     public bool IsAlwaysConvert(string word)
     {
+        word = Normalize(word);
         lock (_gate)
         {
             return _always.Contains(word);
@@ -53,7 +72,7 @@ public sealed class UserDictionary
 
     public void AddNeverConvert(string word)
     {
-        word = word.Trim();
+        word = Normalize(word);
         if (word.Length == 0)
         {
             return;
@@ -71,6 +90,7 @@ public sealed class UserDictionary
 
     public void RemoveNeverConvert(string word)
     {
+        word = Normalize(word);
         lock (_gate)
         {
             _never.Remove(word);
@@ -82,6 +102,12 @@ public sealed class UserDictionary
     /// <summary>Counts a conversion the user did not undo; repeated acceptance promotes the word.</summary>
     public void RecordAccepted(string word)
     {
+        word = Normalize(word);
+        if (word.Length == 0)
+        {
+            return;
+        }
+
         lock (_gate)
         {
             if (_never.Contains(word) || _always.Contains(word))
@@ -104,8 +130,17 @@ public sealed class UserDictionary
         ScheduleSave();
     }
 
+    public void Flush()
+    {
+        if (_dirty)
+        {
+            Write();
+        }
+    }
+
     private void ScheduleSave()
     {
+        _dirty = true;
         if (Interlocked.Exchange(ref _saveScheduled, 1) == 1)
         {
             return;
@@ -121,23 +156,27 @@ public sealed class UserDictionary
 
     private void Write()
     {
-        UserData snapshot;
-        lock (_gate)
+        lock (_writeLock)
         {
-            snapshot = new UserData
+            _dirty = false;
+            UserData snapshot;
+            lock (_gate)
             {
-                NeverConvert = _never.ToList(),
-                AlwaysConvert = _always.ToList(),
-                Accepted = new Dictionary<string, int>(_accepted)
-            };
-        }
+                snapshot = new UserData
+                {
+                    NeverConvert = _never.ToList(),
+                    AlwaysConvert = _always.ToList(),
+                    Accepted = new Dictionary<string, int>(_accepted)
+                };
+            }
 
-        try
-        {
-            File.WriteAllText(_path, JsonSerializer.Serialize(snapshot, Options));
-        }
-        catch (IOException)
-        {
+            try
+            {
+                File.WriteAllText(_path, JsonSerializer.Serialize(snapshot, AppJsonContext.Default.UserData));
+            }
+            catch (IOException)
+            {
+            }
         }
     }
 
@@ -146,7 +185,7 @@ public sealed class UserDictionary
         try
         {
             return File.Exists(_path)
-                ? JsonSerializer.Deserialize<UserData>(File.ReadAllText(_path)) ?? new UserData()
+                ? JsonSerializer.Deserialize(File.ReadAllText(_path), AppJsonContext.Default.UserData) ?? new UserData()
                 : new UserData();
         }
         catch (Exception ex) when (ex is JsonException or IOException)
@@ -155,7 +194,10 @@ public sealed class UserDictionary
         }
     }
 
-    private sealed class UserData
+    private static string Normalize(string word) =>
+        word.Trim().Replace("\u200c", string.Empty).Replace('ي', 'ی').Replace('ك', 'ک').ToLowerInvariant();
+
+    internal sealed class UserData
     {
         public List<string> NeverConvert { get; set; } = new();
         public List<string> AlwaysConvert { get; set; } = new();

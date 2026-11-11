@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using KeyFlip.Core;
 
@@ -56,7 +56,7 @@ public sealed class HotkeyBox : Control
         }
 
         var code = keyData & Keys.KeyCode;
-        if (code is Keys.ControlKey or Keys.ShiftKey or Keys.Menu)
+        if (code is Keys.ControlKey or Keys.ShiftKey or Keys.Menu or Keys.LWin or Keys.RWin)
         {
             return true;
         }
@@ -104,7 +104,8 @@ public sealed class HotkeyBox : Control
             : HotkeyFormatter.Format(_modifiers, _key);
         var color = _invalid ? Theme.Danger : _capturing ? Theme.Muted : Theme.Text;
         using var brush = new SolidBrush(color);
-        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        var flags = _capturing ? StringFormatFlags.DirectionRightToLeft : 0;
+        using var format = new StringFormat(flags) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         g.DrawString(text, _font, brush, new RectangleF(0, 0, Width, Height), format);
     }
 

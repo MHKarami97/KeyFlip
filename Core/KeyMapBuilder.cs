@@ -1,4 +1,4 @@
-﻿namespace KeyFlip.Core;
+namespace KeyFlip.Core;
 
 /// <summary>Builds the key table from built-in defaults, the installed Persian layout, and user overrides.</summary>
 public sealed class KeyMapBuilder
@@ -72,7 +72,7 @@ public sealed class KeyMapBuilder
         {
             if (IsPersianLetter(character))
             {
-                table[key] = (ResolveEnglish(key, english), character);
+                table[key] = (ResolveEnglish(key, english), NormalizePersian(character));
             }
         }
 
@@ -95,17 +95,24 @@ public sealed class KeyMapBuilder
             }
 
             var english = table.TryGetValue(key, out var existing) ? existing.English : FallbackEnglish(key);
-            table[key] = (english, text[0]);
+            table[key] = (english, NormalizePersian(text[0]));
         }
 
         foreach (var (key, text) in settings.EnglishKeyOverrides)
         {
             if (!string.IsNullOrEmpty(text) && table.TryGetValue(key, out var existing))
             {
-                table[key] = (text[0], existing.Persian);
+                table[key] = (char.ToLowerInvariant(text[0]), existing.Persian);
             }
         }
     }
+
+    private static char NormalizePersian(char c) => c switch
+    {
+        'ي' => 'ی',
+        'ك' => 'ک',
+        _ => c
+    };
 
     private static char ResolveEnglish(int key, Dictionary<int, char> english) =>
         english.TryGetValue(key, out var character) && character is > ' ' and < '\u007f'

@@ -1,4 +1,4 @@
-﻿namespace KeyFlip.UI;
+namespace KeyFlip.UI;
 
 /// <summary>Dark list with an input box, an add button and a remove button.</summary>
 public sealed class EditableListPanel : Panel
@@ -79,6 +79,14 @@ public sealed class EditableListPanel : Panel
         _list.Items.Clear();
         _list.Items.AddRange(_load().Cast<object>().ToArray());
         _list.EndUpdate();
+    }
+
+    public void SetSuggestions(IEnumerable<string> suggestions)
+    {
+        _input.BeginUpdate();
+        _input.Items.Clear();
+        _input.Items.AddRange(suggestions.Cast<object>().ToArray());
+        _input.EndUpdate();
     }
 
     protected override void Dispose(bool disposing)

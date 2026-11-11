@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Reflection;
 
 namespace KeyFlip.Core;
@@ -27,7 +27,9 @@ public sealed class LanguageDetector
     private const double StrongBias = 0.4;
     private const double BothKnownMinBias = 0.25;
     private const double BothKnownRankRatio = 30;
+    private const double SemicolonRankRatio = 10;
     private const double SeedCount = 1e12;
+    private static readonly string[] ContractionSuffixes = { "s", "t", "re", "ve", "ll", "d", "m", "" };
 
     private readonly UserDictionary _user;
     private readonly NgramModel _englishModel = new();
@@ -65,12 +67,15 @@ public sealed class LanguageDetector
         var typedWords = typedIsEnglish ? _english : _persian;
         var alternativeWords = typedIsEnglish ? _persian : _english;
 
-        var typedKnown = Morphology.IsKnown(typed, typedWords, typedIsEnglish);
+        string? typedBase = null;
+        var typedKnown = typedIsEnglish
+            ? IsKnownEnglishToken(typed, bias, out typedBase)
+            : Morphology.IsKnown(typed, typedWords, false);
         var alternativeKnown = Morphology.IsKnown(alternative, alternativeWords, !typedIsEnglish);
 
         if (typedKnown && alternativeKnown)
         {
-            var flip = PrefersAlternative(typed, alternative, typedWords, alternativeWords, bias);
+            var flip = PrefersAlternative(typed, typedBase ?? typed, alternative, typedWords, alternativeWords, bias);
             return new Evaluation(flip ? Verdict.Flip : Verdict.Keep, !flip);
         }
 
@@ -89,6 +94,7 @@ public sealed class LanguageDetector
 
     /// <summary>Both readings are real words: convert only if recent words support it and the alternative is far more frequent.</summary>
     private static bool PrefersAlternative(
+        string rawTyped,
         string typed,
         string alternative,
         Dictionary<string, int> typedWords,
@@ -102,18 +108,23 @@ public sealed class LanguageDetector
             return false;
         }
 
-        return typedRank / (double)alternativeRank >= BothKnownRankRatio;
+        var ratio = rawTyped.EndsWith(';') ? SemicolonRankRatio : BothKnownRankRatio;
+        return typedRank / (double)alternativeRank >= ratio;
     }
 
     private Evaluation EvaluateByNgram(string typed, string alternative, bool typedIsEnglish, double bias)
     {
+        var typedForScore = typedIsEnglish && TryStripOuterEnglishPunctuation(typed, out var core) && core.Length >= 2
+            ? core
+            : typed;
+
         var minimumLength = bias >= StrongBias ? MinNgramLengthWithContext : MinNgramLength;
-        if (!_ngramEnabled || typed.Length < minimumLength)
+        if (!_ngramEnabled || Math.Min(typedForScore.Length, alternative.Length) < minimumLength)
         {
             return new Evaluation(Verdict.Keep, false);
         }
 
-        var typedScore = typedIsEnglish ? _englishModel.Score(typed) : _persianModel.Score(typed);
+        var typedScore = typedIsEnglish ? _englishModel.Score(typedForScore) : _persianModel.Score(typed);
         var alternativeScore = typedIsEnglish ? _persianModel.Score(alternative) : _englishModel.Score(alternative);
         var delta = alternativeScore - typedScore + bias;
 
@@ -123,6 +134,114 @@ public sealed class LanguageDetector
         }
 
         return new Evaluation(delta > Margin * WeakFraction ? Verdict.Maybe : Verdict.Keep, false);
+    }
+
+    private bool IsKnownEnglishToken(string token, double bias, out string? baseWord)
+    {
+        if (Morphology.IsKnown(token, _english, true))
+        {
+            baseWord = token;
+            return true;
+        }
+
+        if (token.All(char.IsAsciiLetter))
+        {
+            baseWord = null;
+            return false;
+        }
+
+        var candidate = TryStripOuterEnglishPunctuation(token, out var stripped) ? stripped : token;
+
+        if (TryMatchContraction(candidate, out baseWord))
+        {
+            return true;
+        }
+
+        if (candidate.All(char.IsAsciiLetter))
+        {
+            if (candidate.Length >= 2 && Morphology.IsKnown(candidate, _english, true))
+            {
+                baseWord = candidate;
+                return true;
+            }
+
+            if (candidate.Length == 1 && (token.EndsWith(',') || token.EndsWith(';')) && bias < 0)
+            {
+                baseWord = candidate;
+                return true;
+            }
+        }
+
+        baseWord = null;
+        return false;
+    }
+
+    private bool TryMatchContraction(string token, out string? baseWord)
+    {
+        baseWord = null;
+        var quote = token.IndexOf('\'');
+        if (quote <= 0 || quote != token.LastIndexOf('\''))
+        {
+            return false;
+        }
+
+        var stem = token[..quote];
+        var suffix = token[(quote + 1)..];
+        if (!stem.All(char.IsAsciiLetter) || !ContractionSuffixes.Contains(suffix, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        if (stem == "i" && suffix is "m" or "d" or "ll" or "ve")
+        {
+            baseWord = stem + suffix;
+            return true;
+        }
+
+        if (Morphology.IsKnown(stem, _english, true))
+        {
+            baseWord = stem;
+            return true;
+        }
+
+        if (suffix == "t" && stem.EndsWith('n') && stem.Length >= 3)
+        {
+            var merged = stem + suffix;
+            if (_english.ContainsKey(merged))
+            {
+                baseWord = merged;
+                return true;
+            }
+
+            var root = stem[..^1];
+            if (Morphology.IsKnown(root, _english, true))
+            {
+                baseWord = root;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryStripOuterEnglishPunctuation(string token, out string core)
+    {
+        var start = 0;
+        var end = token.Length;
+
+        if (end > start && token[end - 1] is ',' or ';')
+        {
+            end--;
+        }
+
+        if (end - start >= 2 && ((token[start] == '[' && token[end - 1] == ']') || (token[start] == '\'' && token[end - 1] == '\'')))
+        {
+            start++;
+            end--;
+        }
+
+        core = token[start..end];
+        return core.Length > 0 && core.Length < token.Length;
     }
 
     private void Initialize()
@@ -156,14 +275,16 @@ public sealed class LanguageDetector
         var counts = new Dictionary<string, double>();
         foreach (var line in ReadAllLines(name))
         {
-            var parts = line.Split('\t');
-            var word = normalize(parts[0]);
+            var span = line.AsSpan();
+            var tab = span.IndexOf('\t');
+            var rawWord = tab >= 0 ? span[..tab].ToString() : line;
+            var word = normalize(rawWord);
             if (word is null)
             {
                 continue;
             }
 
-            var count = parts.Length > 1 && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            var count = tab >= 0 && double.TryParse(span[(tab + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
                 ? parsed
                 : SeedCount;
             counts[word] = Math.Max(counts.GetValueOrDefault(word), count);

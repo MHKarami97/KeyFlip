@@ -1,4 +1,4 @@
-﻿using KeyFlip.Core;
+using KeyFlip.Core;
 
 namespace KeyFlip.UI;
 
@@ -39,11 +39,15 @@ public sealed class TrayApplicationContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         _tray.Visible = false;
+        var icon = _tray.Icon;
+        _tray.Icon = null;
+        icon?.Dispose();
         _tray.Dispose();
         _popup.Dispose();
         _advanced?.Dispose();
         _keyMapEditor?.Dispose();
         _engine.Dispose();
+        _user.Flush();
         base.ExitThreadCore();
     }
 

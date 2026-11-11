@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace KeyFlip.Core;
 
@@ -6,9 +6,11 @@ public sealed class KeyboardHook : IDisposable
 {
     private readonly NativeMethods.LowLevelKeyboardProc _callback;
     private readonly ManualResetEventSlim _started = new(false);
+    private readonly object _gate = new();
     private Thread? _thread;
     private uint _threadId;
     private IntPtr _handle = IntPtr.Zero;
+    private bool _disposed;
 
     public KeyboardHook()
     {
@@ -20,31 +22,66 @@ public sealed class KeyboardHook : IDisposable
 
     public void Start()
     {
-        if (_thread is not null)
+        lock (_gate)
         {
-            return;
+            if (_disposed || _thread is not null)
+            {
+                return;
+            }
+
+            _started.Reset();
+            _handle = IntPtr.Zero;
+            _threadId = 0;
+            _thread = new Thread(Run) { IsBackground = true, Name = "KeyFlip.Hook" };
+            _thread.Start();
+            _started.Wait();
+
+            if (_handle == IntPtr.Zero)
+            {
+                _thread = null;
+                throw new InvalidOperationException("Cannot install keyboard hook.");
+            }
+        }
+    }
+
+    public void Stop()
+    {
+        Thread? thread;
+        uint threadId;
+        lock (_gate)
+        {
+            if (_thread is null)
+            {
+                return;
+            }
+
+            thread = _thread;
+            threadId = _threadId;
+            _thread = null;
         }
 
-        _thread = new Thread(Run) { IsBackground = true, Name = "KeyFlip.Hook" };
-        _thread.Start();
-        _started.Wait();
-
-        if (_handle == IntPtr.Zero)
+        if (threadId != 0)
         {
-            throw new InvalidOperationException("Cannot install keyboard hook.");
+            NativeMethods.PostThreadMessage(threadId, NativeMethods.WM_QUIT, UIntPtr.Zero, IntPtr.Zero);
         }
+
+        thread.Join(1000);
     }
 
     public void Dispose()
     {
-        if (_thread is null)
+        lock (_gate)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
         }
 
-        NativeMethods.PostThreadMessage(_threadId, NativeMethods.WM_QUIT, UIntPtr.Zero, IntPtr.Zero);
-        _thread.Join(1000);
-        _thread = null;
+        Stop();
+        _started.Dispose();
     }
 
     private void Run()

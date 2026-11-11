@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using KeyFlip.Core;
 
 namespace KeyFlip.UI;
@@ -13,6 +13,8 @@ public sealed class AdvancedForm : Form
     private readonly Action _onChanged;
     private readonly Action _openKeyMapEditor;
     private readonly float _scale;
+    private EditableListPanel? _appsPanel;
+    private EditableListPanel? _wordsPanel;
 
     public AdvancedForm(AppSettings settings, UserDictionary user, Action onChanged, Action openKeyMapEditor)
     {
@@ -45,6 +47,18 @@ public sealed class AdvancedForm : Form
     {
         base.OnHandleCreated(e);
         Dwm.UseDarkTitleBar(Handle);
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        if (Visible)
+        {
+            _appsPanel?.SetSuggestions(GetRunningProcessNames());
+            _appsPanel?.Reload();
+            _wordsPanel?.Reload();
+        }
+
+        base.OnVisibleChanged(e);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -87,7 +101,7 @@ public sealed class AdvancedForm : Form
 
     private void AddAppsPanel(int top)
     {
-        var panel = new EditableListPanel(
+        _appsPanel = new EditableListPanel(
             "برنامه‌هایی که تبدیل خودکار در آن‌ها غیرفعال است (نام پردازه)",
             FormWidth - Margin * 2,
             _scale,
@@ -112,22 +126,22 @@ public sealed class AdvancedForm : Form
         {
             Location = new Point(S(Margin), S(top))
         };
-        Controls.Add(panel);
+        Controls.Add(_appsPanel);
     }
 
     private void AddWordsPanel(int top)
     {
-        var panel = new EditableListPanel(
+        _wordsPanel = new EditableListPanel(
             "کلماتی که هرگز تبدیل نشوند (همان‌طور که تایپ می‌شوند)",
             FormWidth - Margin * 2,
             _scale,
             () => _user.GetNeverConvert(),
-            word => _user.AddNeverConvert(word.ToLowerInvariant()),
+            word => _user.AddNeverConvert(word),
             word => _user.RemoveNeverConvert(word))
         {
             Location = new Point(S(Margin), S(top))
         };
-        Controls.Add(panel);
+        Controls.Add(_wordsPanel);
     }
 
     private void AddKeyMapButton(int top)
@@ -141,13 +155,22 @@ public sealed class AdvancedForm : Form
         Controls.Add(button);
     }
 
-    private static IEnumerable<string> GetRunningProcessNames() =>
-        Process.GetProcesses()
-            .Where(process => process.MainWindowHandle != IntPtr.Zero)
-            .Select(process => process.ProcessName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+    private static IEnumerable<string> GetRunningProcessNames()
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                if (process.MainWindowHandle != IntPtr.Zero)
+                {
+                    names.Add(process.ProcessName);
+                }
+            }
+        }
+
+        return names.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     private static float GetScale()
     {
